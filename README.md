@@ -42,11 +42,14 @@ Do not include any explanation, markdown formatting, or code fences.
 - **`npm run test:coverage`** — same with V8 coverage for `app/api/**` and `lib/**`.
 - **GitHub Actions** — on every **pull request** and on **every push** (including the first push to a new branch), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`npm run lint`** and **`npm run test:run`** on Ubuntu with Node 22.
 
+**Co-location:** each test file sits **next to** the module it covers and uses the **same basename** + `.test` + extension, e.g. `route.ts` → `route.test.ts`, `page.tsx` → `page.test.tsx`.
+
 Coverage today:
 
-- **`lib/parse-model-response.test.ts`** — fence stripping and strict JSON shape validation.
-- **`app/api/analyze/route.test.ts`** — `POST` validation, env checks, mocked Anthropic success/failure paths, fenced model output, split text blocks.
-- **`app/page.test.tsx`** — reviewer disclaimer copy, submit disabled when empty, happy path and error UI with mocked `fetch`.
+- **`lib/parse-model-response.ts`** → **`parse-model-response.test.ts`** — fence stripping and strict JSON shape validation.
+- **`app/api/analyze/route.ts`** → **`route.test.ts`** — `POST` validation, env checks, mocked Anthropic success/failure paths, fenced model output, split text blocks.
+- **`app/page.tsx`** → **`page.test.tsx`** — reviewer disclaimer copy, sample transcript button, happy path and error UI with mocked `fetch`.
+- **`components/analysis-progress.tsx`** → **`analysis-progress.test.tsx`** — stage label and progressbar accessibility.
 
 ## Setup
 

@@ -16,6 +16,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { SAMPLE_MEETING_TRANSCRIPT } from "@/lib/sample-meeting-transcript";
 import { cn } from "@/lib/utils";
 
+const EXAMPLE_REPO_SETUP_PR =
+  "https://github.com/Lucas-Song-Dev/TribalScale_interview/pull/1";
+
 type SuccessBody = {
   summary: string;
   action_items: string[];
@@ -89,6 +92,49 @@ export default function Home() {
                 returns a summary and three action items as JSON.
               </p>
             </header>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Example: GitHub repo setup
+                </CardTitle>
+                <CardDescription>
+                  This{" "}
+                  <a
+                    href={EXAMPLE_REPO_SETUP_PR}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-foreground underline decoration-muted-foreground underline-offset-2 hover:decoration-foreground"
+                  >
+                    example pull request (#1)
+                  </a>{" "}
+                  shows how this repository is wired for{" "}
+                  <strong className="font-medium text-foreground">
+                    automated testing
+                  </strong>
+                  ,{" "}
+                  <strong className="font-medium text-foreground">
+                    CI on branches
+                  </strong>
+                  , and{" "}
+                  <strong className="font-medium text-foreground">
+                    branch protection
+                  </strong>{" "}
+                  so changes are reviewed before they land on the default branch.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={EXAMPLE_REPO_SETUP_PR}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open example PR on GitHub
+                  </a>
+                </Button>
+              </CardContent>
+            </Card>
 
             <aside
               className="rounded-lg border border-warning-border bg-warning p-4 text-sm text-warning-foreground"

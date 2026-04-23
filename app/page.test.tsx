@@ -16,6 +16,20 @@ describe("Home page", () => {
     vi.unstubAllGlobals();
   });
 
+  it("links to example PR for repo testing and branch protection setup", () => {
+    render(<Home />);
+    const inline = screen.getByRole("link", {
+      name: /example pull request \(\#1\)/i,
+    });
+    const cta = screen.getByRole("link", {
+      name: /open example pr on github/i,
+    });
+    const href =
+      "https://github.com/Lucas-Song-Dev/TribalScale_interview/pull/1";
+    expect(inline).toHaveAttribute("href", href);
+    expect(cta).toHaveAttribute("href", href);
+  });
+
   it("shows reviewer scope disclaimer", () => {
     render(<Home />);
     expect(screen.getByRole("note")).toBeInTheDocument();
