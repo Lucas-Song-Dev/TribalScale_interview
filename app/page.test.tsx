@@ -29,6 +29,19 @@ describe("Home page", () => {
     expect(screen.getByRole("button", { name: "Analyze" })).toBeDisabled();
   });
 
+  it("loads sample meeting transcript into the textarea when clicked", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    await user.click(
+      screen.getByRole("button", { name: /load meeting example/i })
+    );
+    const box = screen.getByRole("textbox", {
+      name: /text to analyze/i,
+    }) as HTMLTextAreaElement;
+    expect(box.value).toContain("Sarah (PM): Okay let's get started");
+    expect(box.value).toContain("Marcus");
+  });
+
   it("submits text and renders summary and action items on success", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue({

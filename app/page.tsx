@@ -1,6 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { AnalysisProgress } from "@/components/analysis-progress";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { SAMPLE_MEETING_TRANSCRIPT } from "@/lib/sample-meeting-transcript";
+import { cn } from "@/lib/utils";
 
 type SuccessBody = {
   summary: string;
@@ -14,11 +28,19 @@ type ErrorBody = {
 export default function Home() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progressRunId, setProgressRunId] = useState(0);
   const [result, setResult] = useState<SuccessBody | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function loadSampleTranscript() {
+    setText(SAMPLE_MEETING_TRANSCRIPT);
+    setError(null);
+    setResult(null);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setProgressRunId((id) => id + 1);
     setLoading(true);
     setError(null);
     setResult(null);
@@ -51,97 +73,166 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
-        <header className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Text analyzer
-          </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            TribalScale take-home: POST{" "}
-            <code className="rounded bg-zinc-200/80 px-1.5 py-0.5 font-mono text-xs dark:bg-zinc-800">
-              /api/analyze
-            </code>{" "}
-            returns a summary and three action items as JSON.
-          </p>
-        </header>
+    <div className="min-h-full flex-1 bg-background text-foreground">
+      <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
+        <div className="grid gap-8 lg:grid-cols-[1fr_300px] lg:items-start">
+          <div className="flex flex-col gap-8">
+            <header className="space-y-2">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Text analyzer
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                TribalScale take-home: POST{" "}
+                <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  /api/analyze
+                </code>{" "}
+                returns a summary and three action items as JSON.
+              </p>
+            </header>
 
-        <aside
-          className="rounded-lg border border-amber-200/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
-          role="note"
-        >
-          <p className="font-medium">Reviewer note (scope)</p>
-          <p className="mt-2 leading-relaxed text-amber-900/90 dark:text-amber-100/90">
-            This page is{" "}
-            <strong className="font-semibold">not part of the take-home</strong>
-            . The exercise asks for an API that returns structured JSON. I added
-            this UI only so you can{" "}
-            <strong className="font-semibold">see and trigger</strong>{" "}
-            <code className="rounded bg-amber-200/70 px-1 font-mono text-[0.8rem] dark:bg-amber-900/50">
-              POST /api/analyze
-            </code>{" "}
-            without using{" "}
-            <code className="rounded bg-amber-200/70 px-1 font-mono text-[0.8rem] dark:bg-amber-900/50">
-              curl
-            </code>
-            . What I expect you to evaluate is the{" "}
-            <strong className="font-semibold">route handler and prompt flow</strong>
-            , not the frontend.
-          </p>
-        </aside>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Text to analyze
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={10}
-              className="resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal shadow-sm outline-none ring-zinc-400 placeholder:text-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:ring-zinc-600"
-              placeholder="Paste meeting notes, an email thread, a brief, etc."
-              disabled={loading}
-              required
-            />
-          </label>
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={loading || text.trim().length === 0}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            <aside
+              className="rounded-lg border border-warning-border bg-warning p-4 text-sm text-warning-foreground"
+              role="note"
             >
-              {loading ? "Analyzing…" : "Analyze"}
-            </button>
-          </div>
-        </form>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium">Reviewer note (scope)</p>
+                <Badge variant="outline" className="text-xs">
+                  Not graded
+                </Badge>
+              </div>
+              <p className="mt-2 leading-relaxed">
+                This page is{" "}
+                <strong className="font-semibold">not part of the take-home</strong>
+                . The exercise asks for an API that returns structured JSON. I
+                added this UI only so you can{" "}
+                <strong className="font-semibold">see and trigger</strong>{" "}
+                <code className="rounded-md bg-background/60 px-1 font-mono text-[0.8rem]">
+                  POST /api/analyze
+                </code>{" "}
+                without using{" "}
+                <code className="rounded-md bg-background/60 px-1 font-mono text-[0.8rem]">
+                  curl
+                </code>
+                . What I expect you to evaluate is the{" "}
+                <strong className="font-semibold">
+                  route handler and prompt flow
+                </strong>
+                , not the frontend.
+              </p>
+            </aside>
 
-        {error ? (
-          <div
-            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
-            role="alert"
-          >
-            {error}
-          </div>
-        ) : null}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Analyze text</CardTitle>
+                <CardDescription>
+                  Paste notes, a transcript, or any block of text below.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="analyze-text">Text to analyze</Label>
+                    <Textarea
+                      id="analyze-text"
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      rows={14}
+                      placeholder="Paste meeting notes, an email thread, a brief, etc."
+                      disabled={loading}
+                      required
+                      className="min-h-[200px] font-sans"
+                    />
+                  </div>
+                  {loading ? (
+                    <AnalysisProgress
+                      key={progressRunId}
+                      stageLabel="Model"
+                      className="rounded-md border border-border bg-muted/30 p-3"
+                    />
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="submit"
+                      disabled={loading || text.trim().length === 0}
+                    >
+                      {loading ? "Analyzing…" : "Analyze"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
 
-        {result ? (
-          <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Summary
-            </h2>
-            <p className="whitespace-pre-wrap text-base leading-relaxed">
-              {result.summary}
-            </p>
-            <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Action items
-            </h2>
-            <ol className="list-decimal space-y-2 pl-5 text-base leading-relaxed">
-              {result.action_items.map((item, i) => (
-                <li key={i}>{item}</li>
-              ))}
-            </ol>
-          </section>
-        ) : null}
-      </main>
+            {error ? (
+              <div
+                className={cn(
+                  "rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                )}
+                role="alert"
+              >
+                {error}
+              </div>
+            ) : null}
+
+            {result ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Results</CardTitle>
+                  <CardDescription>
+                    Summary and three action items from the model.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Summary
+                    </h2>
+                    <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed">
+                      {result.summary}
+                    </p>
+                  </div>
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Action items
+                    </h2>
+                    <ol className="mt-2 list-decimal space-y-2 pl-5 text-base leading-relaxed">
+                      {result.action_items.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+
+          <aside className="lg:sticky lg:top-8 lg:self-start">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Try an example</CardTitle>
+                <CardDescription>
+                  Loads a realistic stand-up transcript into the text box so you
+                  can run the API without pasting manually.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  PM + eng + design: API rollout blockers, staging demo, client
+                  scope summary.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={loadSampleTranscript}
+                  disabled={loading}
+                >
+                  Load meeting example
+                </Button>
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }

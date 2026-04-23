@@ -40,7 +40,7 @@ Do not include any explanation, markdown formatting, or code fences.
 - **`npm run test`** — Vitest in watch mode.
 - **`npm run test:run`** — single CI-style run (no watch).
 - **`npm run test:coverage`** — same with V8 coverage for `app/api/**` and `lib/**`.
-- **GitHub Actions** — on every **pull request** (and pushes to `main` / `master`), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`npm run lint`** and **`npm run test:run`** on Ubuntu with Node 22.
+- **GitHub Actions** — on every **pull request** and on **every push** (including the first push to a new branch), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`npm run lint`** and **`npm run test:run`** on Ubuntu with Node 22.
 
 Coverage today:
 
