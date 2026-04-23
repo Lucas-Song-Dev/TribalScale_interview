@@ -1,9 +1,9 @@
 name: CI
 
+# Runs on every PR and on every push (including the first push when a new branch is created).
 on:
   pull_request:
   push:
-    branches: [main, master]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
