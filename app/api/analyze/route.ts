@@ -23,6 +23,12 @@ function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
+/**
+ * The SDK returns `content` as `ContentBlock[]`, not a plain string: the model may
+ * stream or chunk multiple `text` blocks, and other block types (`tool_use`, etc.)
+ * can appear in the array. We concatenate every `text` block and ignore the rest
+ * for this prompt-only path (no tools).
+ */
 function getTextFromMessage(content: Anthropic.Message["content"]): string {
   const parts: string[] = [];
   for (const block of content) {
@@ -74,6 +80,7 @@ export async function POST(request: Request) {
 
   let rawAssistant: string;
   try {
+    // System = trusted contract; user = untrusted document only (see README Prompt design).
     const message = await client.messages.create({
       model,
       max_tokens: 1024,

@@ -1,79 +1,146 @@
 # Text analyzer (TribalScale take-home)
 
-Small **Next.js** app with one API route: send a block of text, get a **short summary** and **exactly three action items** as **structured JSON**. Deploys cleanly to **Vercel** (Node runtime on the route).
+Next.js app that exposes **`POST /api/analyze`**: send a block of text, call **Anthropic Claude**, and receive a **short summary** plus **exactly three action items** as **structured JSON**. Includes an **optional reviewer UI** at `/` (out of scope for the original brief) and **Vitest** + **GitHub Actions** CI.
 
-## What I built
+---
 
-- **`POST /api/analyze`** — validates input, calls **Anthropic Claude** with a single prompt that asks for JSON only, strips markdown fences when needed, parses and validates shape, returns `{ "summary", "action_items" }` or `{ "error" }`.
-- **A minimal page** at `/` — **not part of the exercise brief**; it only exists so reviewers can trigger the API without `curl`. The evaluated piece is the **route handler + prompt design** (see note on the page).
+## Table of contents
 
-## Prompt(s) used
+1. [Overview](#overview)
+2. [Repository layout](#repository-layout)
+3. [Tech stack](#tech-stack)
+4. [Environment variables](#environment-variables)
+5. [Scripts](#scripts)
+6. [Local development](#local-development)
+7. [API](#api)
+8. [Frontend](#frontend)
+9. [Libraries and shared code](#libraries-and-shared-code)
+10. [UI components](#ui-components)
+11. [Testing](#testing)
+12. [Continuous integration](#continuous-integration)
+13. [Deployment (Vercel)](#deployment-vercel)
+14. [Prompt design](#prompt-design)
+15. [What broke first and how it was fixed](#what-broke-first-and-how-it-was-fixed)
+16. [Future improvements](#future-improvements)
+17. [API design tradeoffs and performance](#api-design-tradeoffs-and-performance)
+18. [Links](#links)
 
-**System message** (verbatim intent):
+---
 
-```text
-Analyze the following text and respond with ONLY valid JSON in this exact format:
-{
-  "summary": "2-3 sentence summary",
-  "action_items": ["item 1", "item 2", "item 3"]
-}
+## Overview
 
-Do not include any explanation, markdown formatting, or code fences.
-```
+**Take-home goal:** one endpoint that accepts text, uses an LLM for a summary + three action items, returns JSON (or structured errors).
 
-**User message**: the input text is sent as `Text:\n{user text}` so instructions stay in `system` and the document stays in `user`.
+**This repository adds:**
 
-## What did not work at first and how I adjusted
+- **Next.js App Router** app with a **Route Handler** for the API (no separate Express server).
+- **Reviewer-facing UI** at `/` with a clear scope note, sample transcript, links to an example PR and the GitHub repo, analyze form with staged progress, **HTML / JSON** results (including **Copy JSON**), plus a dedicated **`/backend`** page of annotated code blocks for easy search and copy-paste.
+- **Vitest** tests **co-located** next to the modules they cover (`*.test.ts` / `*.test.tsx`).
+- **GitHub Actions** running **lint** and **tests** on every **push** and **pull request**.
 
-- **Models sometimes wrap JSON in fences** despite “no fences” — added a small **`stripMarkdownFences`** step before `JSON.parse` (see `lib/parse-model-response.ts`).
-- **Loose parsing hid bad outputs** — enforced **exactly three non-empty string** action items and a non-empty summary; otherwise respond with **500** and a stable error message instead of partial JSON.
+The **graded deliverable** for the exercise is the **API behavior and prompt path**; the page is convenience tooling for reviewers.
 
-## What I would improve with more time
+---
 
-- **Anthropic tool use / structured outputs** so the model is schema-bound and fence-trimming becomes unnecessary.
-- **Retry once** on parse failure with a stricter “JSON only, no prose” reminder.
-- **Prompt-injection hardening** (delimiters, policy checks) and **rate limiting** for a public endpoint.
-- **Contract / E2E tests** against a deployed environment or recorded Anthropic responses.
+## Repository layout
 
-## Testing
+| Path | Purpose |
+|------|---------|
+| [`app/layout.tsx`](app/layout.tsx) | Root layout, **Inter** + **Geist Mono** fonts, metadata. |
+| [`app/globals.css`](app/globals.css) | **Tailwind CSS v4** + **OKLCH** semantic tokens (`background`, `foreground`, `primary`, `muted`, `destructive`, `warning`, etc.). |
+| [`app/page.tsx`](app/page.tsx) | Client home: analyze form, link to `/backend`, reviewer note, results (HTML/JSON toggle), sidebar cards. |
+| [`app/page.test.tsx`](app/page.test.tsx) | Tests for the home page. |
+| [`app/backend/page.tsx`](app/backend/page.tsx) | **Reviewer doc:** annotated `POST /api/analyze` walkthrough (anchors, copy per block). |
+| [`app/backend/layout.tsx`](app/backend/layout.tsx) | Metadata for `/backend`. |
+| [`app/backend/page.test.tsx`](app/backend/page.test.tsx) | Tests for the backend doc page. |
+| [`app/api/analyze/route.ts`](app/api/analyze/route.ts) | `POST /api/analyze` — validation, Anthropic call, parse/validate response. |
+| [`app/api/analyze/route.test.ts`](app/api/analyze/route.test.ts) | API route tests (mocked SDK). |
+| [`components/ui/`](components/ui/) | shadcn-style primitives: `Button`, `Card`, `Label`, `Textarea`, `Badge` (CVA + Radix where needed). |
+| [`components/analysis-progress.tsx`](components/analysis-progress.tsx) | Progress bar + stage label while the model runs (mount with `key` per run). |
+| [`components/analysis-progress.test.tsx`](components/analysis-progress.test.tsx) | Tests for progress UI. |
+| [`components/doc-code-block.tsx`](components/doc-code-block.tsx) | Client “doc” block: title, optional lead, monospace snippet, **Copy block**. |
+| [`lib/utils.ts`](lib/utils.ts) | `cn()` — `clsx` + `tailwind-merge` for class composition. |
+| [`lib/parse-model-response.ts`](lib/parse-model-response.ts) | Strip markdown fences, parse and validate `{ summary, action_items[3] }`. |
+| [`lib/parse-model-response.test.ts`](lib/parse-model-response.test.ts) | Parser unit tests. |
+| [`lib/sample-meeting-transcript.ts`](lib/sample-meeting-transcript.ts) | Constant sample meeting text for the “Load meeting example” control. |
+| [`lib/backend-doc-sections.ts`](lib/backend-doc-sections.ts) | Section titles + annotated code strings for [`/backend`](app/backend/page.tsx). |
+| [`vitest.config.ts`](vitest.config.ts) | Vitest + React plugin, `@/` alias, coverage include paths. |
+| [`vitest.setup.ts`](vitest.setup.ts) | `@testing-library/jest-dom` + RTL `cleanup()` after each test. |
+| [`eslint.config.mjs`](eslint.config.mjs) | ESLint (Next core-web-vitals + TypeScript); ignores `coverage/`, `.next/`, etc. |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI workflow (Node 22, `npm ci`, lint, tests). |
+| [`.env.example`](.env.example) | Documented env vars (no secrets). |
+| [`next.config.ts`](next.config.ts) | Next.js config (defaults). |
+| [`postcss.config.mjs`](postcss.config.mjs) | PostCSS for Tailwind. |
+| [`tsconfig.json`](tsconfig.json) | TypeScript; `paths`: `@/*` → project root. |
 
-- **`npm run test`** — Vitest in watch mode.
-- **`npm run test:run`** — single CI-style run (no watch).
-- **`npm run test:coverage`** — same with V8 coverage for `app/api/**` and `lib/**`.
-- **GitHub Actions** — on every **pull request** and on **every push** (including the first push to a new branch), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`npm run lint`** and **`npm run test:run`** on Ubuntu with Node 22.
+---
 
-**Co-location:** each test file sits **next to** the module it covers and uses the **same basename** + `.test` + extension, e.g. `route.ts` → `route.test.ts`, `page.tsx` → `page.test.tsx`.
+## Tech stack
 
-Coverage today:
+| Layer | Choice |
+|--------|--------|
+| Framework | **Next.js 16** (App Router) |
+| UI | **React 19**, **Tailwind CSS v4**, **class-variance-authority**, **Radix** (`@radix-ui/react-slot`, `@radix-ui/react-label`) |
+| LLM | **Anthropic** via `@anthropic-ai/sdk` |
+| Language | **TypeScript** |
+| Tests | **Vitest 4**, **Testing Library**, **jsdom** |
+| Lint | **ESLint 9** + `eslint-config-next` |
 
-- **`lib/parse-model-response.ts`** → **`parse-model-response.test.ts`** — fence stripping and strict JSON shape validation.
-- **`app/api/analyze/route.ts`** → **`route.test.ts`** — `POST` validation, env checks, mocked Anthropic success/failure paths, fenced model output, split text blocks.
-- **`app/page.tsx`** → **`page.test.tsx`** — reviewer disclaimer copy, sample transcript button, happy path and error UI with mocked `fetch`.
-- **`components/analysis-progress.tsx`** → **`analysis-progress.test.tsx`** — stage label and progressbar accessibility.
+---
 
-## Setup
+## Environment variables
 
-1. Copy [`.env.example`](.env.example) to `.env` and set `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`.
-2. Install and run:
+Copy [`.env.example`](.env.example) to `.env` (`.env` is gitignored).
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key for `POST /api/analyze`. |
+| `ANTHROPIC_MODEL` | Yes | Model id passed to `messages.create` (e.g. your org’s default). |
+| `MAX_TEXT_LENGTH` | No | Max characters for `text` after trim (default **10000**). Read per request in the route handler. |
+
+---
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Next dev server (Turbopack). |
+| `npm run build` | Production build. |
+| `npm run start` | Run production server (after `build`). |
+| `npm run lint` | ESLint. |
+| `npm run test` | Vitest watch mode. |
+| `npm run test:run` | Vitest single run (CI-style). |
+| `npm run test:coverage` | Vitest with V8 coverage (see [Testing](#testing) for scope). |
+
+---
+
+## Local development
 
 ```bash
 npm install
+cp .env.example .env   # then set ANTHROPIC_API_KEY and ANTHROPIC_MODEL
 npm run dev
 ```
 
-3. Call the API (example):
+- App: [http://localhost:3000](http://localhost:3000)
+- Backend walkthrough: [http://localhost:3000/backend](http://localhost:3000/backend)
+- API: `POST http://localhost:3000/api/analyze`
+
+**Windows CMD** (example `curl` uses `\` continuations; use `^` or a single line on Windows):
 
 ```bash
-curl -s -X POST http://localhost:3000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"text":"We agreed to ship the MVP by Friday. Alice will own the API contract. Bob will write the release notes."}'
+curl -s -X POST http://localhost:3000/api/analyze ^
+  -H "Content-Type: application/json" ^
+  -d "{\"text\":\"We agreed to ship the MVP by Friday. Alice will own the API contract. Bob will write the release notes.\"}"
 ```
 
-On **Windows CMD**, replace `\` line endings with `^`, or run as a single line.
+---
 
-## API contract
+## API
 
-**Request:** `POST /api/analyze` — `Content-Type: application/json`
+### `POST /api/analyze`
+
+**Request:** `Content-Type: application/json`
 
 ```json
 { "text": "string, required" }
@@ -94,11 +161,158 @@ On **Windows CMD**, replace `\` line endings with `^`, or run as a single line.
 { "error": "Human-readable error message" }
 ```
 
-Validation matches the original spec: missing `text`, empty (after trim), or over **10,000** characters (override with `MAX_TEXT_LENGTH` in `.env`).
+**Failure contract (single map):** every path returns `{ "error": "<message>" }` with the status below—no need to trace `if` chains in the route to see the surface.
 
-## API calls: tradeoffs, code, and performance at scale
+| Input / condition | HTTP | Response body `error` |
+|-------------------|------|------------------------|
+| Request body is not valid JSON | **400** | `Invalid JSON body` |
+| Body is missing, not a plain object, or is an array | **400** | `text field is required` |
+| `text` is missing or `null` | **400** | `text field is required` |
+| `text` is present but not a string | **400** | `text field is required` |
+| `text` is empty or whitespace-only after trim | **400** | `text must not be empty` |
+| `text` longer than `getMaxTextLength()` (from `MAX_TEXT_LENGTH` or default **10_000**) | **400** | `text exceeds maximum length` |
+| `ANTHROPIC_API_KEY` unset or empty | **500** | `Server configuration error` |
+| `ANTHROPIC_MODEL` unset or empty | **500** | `Server configuration error` |
+| Anthropic `messages.create` throws (network, auth, rate limit, etc.) | **500** | `Failed to complete analysis` |
+| Assistant text is not JSON after fence strip, or `JSON.parse` fails | **500** | `Failed to parse model response` |
+| JSON parses but fails shape checks (non-empty `summary`, exactly **three** non-empty string `action_items`) | **500** | `Invalid model output` |
 
-This section is about **how and when** this handler talks to Anthropic, what was traded off, and what happens if traffic grows. The implementation lives in [`app/api/analyze/route.ts`](app/api/analyze/route.ts) and [`lib/parse-model-response.ts`](lib/parse-model-response.ts).
+**Runtime:** [`app/api/analyze/route.ts`](app/api/analyze/route.ts) sets `export const runtime = "nodejs"` for the Anthropic SDK.
+
+---
+
+## Frontend
+
+**Routes**
+
+- **`/`** — [`app/page.tsx`](app/page.tsx) (client).
+- **`/backend`** — [`app/backend/page.tsx`](app/backend/page.tsx) (server): annotated implementation for reviewers.
+
+**Main column (`/`)**
+
+- Title and short description of the take-home / endpoint, with an inline link to **`/backend`**.
+- **Backend implementation** card (left column, same style as sidebar cards): explains the walkthrough page and links **Open annotated backend walkthrough**.
+- **Reviewer note** (`role="note"`): scope, no scope creep, UI as time-saver vs `curl`; grade route + prompts + validation.
+- **Analyze** card: labeled textarea, **Analyze** submit, optional **Analysis progress** (stage + % bar) while loading.
+- **Error** alert for API/network failures.
+- **Results** card (after success): top-right **HTML | JSON** toggle; **HTML** shows summary + ordered action items; **JSON** shows pretty-printed response and **Copy JSON** (clipboard).
+
+**Right sidebar** (sticky on large screens)
+
+1. **Try an example** — loads [`lib/sample-meeting-transcript.ts`](lib/sample-meeting-transcript.ts) into the textarea.
+2. **Example: GitHub repo setup** — copy + link to [example PR #1](https://github.com/Lucas-Song-Dev/TribalScale_interview/pull/1) (CI, branch protection, etc.).
+3. **Source repository** — button link to the [GitHub repo](https://github.com/Lucas-Song-Dev/TribalScale_interview).
+
+**`/backend` layout**
+
+- **Left column:** “How to use this page” (search, anchors, copy) + **On this page** nav with hash links to each section.
+- **Right column:** ordered sections from [`lib/backend-doc-sections.ts`](lib/backend-doc-sections.ts), each with **Copy block** (clipboard) for that snippet only.
+
+Styling follows a **shadcn-like** pattern: semantic Tailwind tokens from [`app/globals.css`](app/globals.css), composed primitives under [`components/ui/`](components/ui/), and `cn()` from [`lib/utils.ts`](lib/utils.ts).
+
+---
+
+## Libraries and shared code
+
+| Module | Role |
+|--------|------|
+| [`lib/parse-model-response.ts`](lib/parse-model-response.ts) | `stripMarkdownFences`, `parseAnalyzePayload` — strict JSON shape after model text. |
+| [`lib/utils.ts`](lib/utils.ts) | `cn()` for Tailwind class merging. |
+| [`lib/sample-meeting-transcript.ts`](lib/sample-meeting-transcript.ts) | Exported string used by the sample loader button. |
+| [`lib/backend-doc-sections.ts`](lib/backend-doc-sections.ts) | Data for `/backend` (keep in sync with route + parser when they change). |
+
+---
+
+## UI components
+
+| Component | Notes |
+|-----------|--------|
+| [`components/ui/button.tsx`](components/ui/button.tsx) | CVA variants (`default`, `outline`, `ghost`, …); `asChild` via Radix Slot. |
+| [`components/ui/card.tsx`](components/ui/card.tsx) | `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`. |
+| [`components/ui/label.tsx`](components/ui/label.tsx) | Radix Label + CVA. |
+| [`components/ui/textarea.tsx`](components/ui/textarea.tsx) | Styled textarea. |
+| [`components/ui/badge.tsx`](components/ui/badge.tsx) | CVA variants. |
+| [`components/analysis-progress.tsx`](components/analysis-progress.tsx) | Timer-based % bar + stage badge; mount only while loading with a changing `key` from the page. |
+
+---
+
+## Testing
+
+**Run:** `npm run test` (watch) or `npm run test:run` (once).
+
+**Co-location:** tests live **next to** the source file with the **same basename** + `.test` + extension:
+
+| Source | Test |
+|--------|------|
+| [`app/api/analyze/route.ts`](app/api/analyze/route.ts) | [`app/api/analyze/route.test.ts`](app/api/analyze/route.test.ts) |
+| [`lib/parse-model-response.ts`](lib/parse-model-response.ts) | [`lib/parse-model-response.test.ts`](lib/parse-model-response.test.ts) |
+| [`app/page.tsx`](app/page.tsx) | [`app/page.test.tsx`](app/page.test.tsx) |
+| [`app/backend/page.tsx`](app/backend/page.tsx) | [`app/backend/page.test.tsx`](app/backend/page.test.tsx) |
+| [`components/analysis-progress.tsx`](components/analysis-progress.tsx) | [`components/analysis-progress.test.tsx`](components/analysis-progress.test.tsx) |
+
+**Coverage** (`npm run test:coverage`): configured in [`vitest.config.ts`](vitest.config.ts) to include **`app/**/*.ts`** and **`lib/**/*.ts`** (route + parsers; not `*.tsx` UI files by default). HTML report under `coverage/`.
+
+**Clipboard in tests:** for **Copy JSON**, tests mock `navigator.clipboard` **after** `userEvent.setup()` so Testing Library’s clipboard stub is not overwritten.
+
+---
+
+## Continuous integration
+
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+
+- **Triggers:** every **`pull_request`**, and every **`push`** to any branch (including the first push on a new branch).
+- **Runner:** `ubuntu-latest`, **Node 22**, `npm ci`, **`npm run lint`**, **`npm run test:run`**.
+- **Concurrency:** `cancel-in-progress: true` per ref to avoid stacking duplicate runs.
+
+---
+
+## Deployment (Vercel)
+
+1. Import the GitHub repository into Vercel.
+2. Set **`ANTHROPIC_API_KEY`** and **`ANTHROPIC_MODEL`** in the project’s environment variables (and optional **`MAX_TEXT_LENGTH`**).
+3. Deploy. Keep the analyze route on the **Node.js** runtime (`runtime = "nodejs"` in the route file).
+
+---
+
+## Prompt design
+
+**System message** (intent):
+
+```text
+Analyze the following text and respond with ONLY valid JSON in this exact format:
+{
+  "summary": "2-3 sentence summary",
+  "action_items": ["item 1", "item 2", "item 3"]
+}
+
+Do not include any explanation, markdown formatting, or code fences.
+```
+
+**User message:** `Text:\n{user text}` — the JSON contract and formatting rules live in **`system`**; only the untrusted document lives in **`user`**. Models generally treat **system** instructions with higher authority than **user** content, so this separation reduces **prompt-injection** risk: pasted text cannot as easily override “return only JSON” the way it could if instructions and document were blended in one role.
+
+---
+
+## What broke first and how it was fixed
+
+- **Fenced JSON** despite “no fences” → [`stripMarkdownFences`](lib/parse-model-response.ts) before `JSON.parse`.
+- **Loose parsing** → strict validation: non-empty `summary`, **exactly three** non-empty string `action_items`, else **500** with a stable message.
+
+---
+
+## Future improvements
+
+- **Anthropic tool use / structured outputs** for schema-bound responses.
+- **Strict shape vs useful model output:** the parser requires **exactly three** non-empty `action_items`; if the model returns four good items, splits one item across strings, or otherwise drifts slightly, the handler still returns **500** (`Invalid model output`) even when the prose was helpful—relaxing to **≥ 3** items (with truncation or returning extras) or enforcing schema **upstream** via tool use avoids throwing away good generations.
+- **One retry** on parse failure with a stricter JSON-only reminder.
+- **Prompt-injection** hardening, **rate limiting**, richer **server-side** logging for 500s.
+- **Contract / E2E** tests against a deployed preview or recorded fixtures.
+- **Expand coverage** includes to `app/**/*.tsx` / `components/**` if you want UI metrics in CI.
+
+---
+
+## API design tradeoffs and performance
+
+This section is about **how and when** the handler talks to Anthropic, what was traded off, and what happens if traffic grows. Implementation: [`app/api/analyze/route.ts`](app/api/analyze/route.ts), [`lib/parse-model-response.ts`](lib/parse-model-response.ts).
 
 ---
 
@@ -129,14 +343,13 @@ const message = await client.messages.create({
 **What the code does:** the model is instructed to emit JSON as plain text; the server **strips fences** and **`JSON.parse`s**, then **validates** shape strictly.
 
 ```ts
-// After the model returns text:
 const parsed = parseAnalyzePayload(rawAssistant);
 if (!parsed.ok) {
   return jsonError(parsed.reason, 500);
 }
 ```
 
-Fence stripping (because models still sometimes wrap JSON):
+Fence stripping (models still sometimes wrap JSON):
 
 ```ts
 export function stripMarkdownFences(raw: string): string {
@@ -270,6 +483,9 @@ Rough **wall-clock** ordering for a typical `POST /api/analyze`:
 | Errors to client | Generic 500 on provider failures | Structured client errors + rich server logs |
 | Cost control | `max_tokens`, single call | Budgets, model routing, queues; monitor **billable function duration** during slow LLM I/O on Vercel |
 
-## Vercel
+---
 
-Create a project from this repo, set **`ANTHROPIC_API_KEY`** and **`ANTHROPIC_MODEL`** in the project’s Environment Variables, and deploy. The analyze route uses **`export const runtime = "nodejs"`** so the Anthropic SDK runs on the Node serverless runtime.
+## Links
+
+- **Repository:** [github.com/Lucas-Song-Dev/TribalScale_interview](https://github.com/Lucas-Song-Dev/TribalScale_interview)
+- **Example PR (CI + branch protection):** [Pull request #1](https://github.com/Lucas-Song-Dev/TribalScale_interview/pull/1)
