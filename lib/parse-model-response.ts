@@ -13,6 +13,7 @@ export type AnalyzeSuccess = {
   action_items: [string, string, string];
 };
 
+/** Spec requires exactly three non-empty strings; any other length fails closed (see README Future improvements). */
 export function parseAnalyzePayload(
   raw: string
 ): { ok: true; data: AnalyzeSuccess } | { ok: false; reason: string } {

@@ -44,8 +44,6 @@ describe("Home page", () => {
       name: /open annotated backend walkthrough/i,
     });
     expect(walkthrough).toHaveAttribute("href", "/backend");
-    const inline = screen.getByRole("link", { name: /backend reference page/i });
-    expect(inline).toHaveAttribute("href", "/backend");
   });
 
   it("links to the source repository on GitHub", () => {

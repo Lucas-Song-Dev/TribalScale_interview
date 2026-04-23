@@ -52,7 +52,8 @@ const SYSTEM_PROMPT = \`Analyze the following text and respond with ONLY valid J
 
 Do not include any explanation, markdown formatting, or code fences.\`;
 
-// User message in the real handler: \`Text:\\n\$\{text\}\` — keeps instructions in system, document in user.`,
+// Real handler user message: \`Text:\\n\$\{text\}\` — contract in system, untrusted doc in user
+// (higher authority on system reduces prompt-injection vs mixing both in one message).`,
   },
   {
     id: "parse-request",
@@ -103,10 +104,13 @@ export async function POST(request: Request) {
     id: "anthropic",
     title: "4. Call Anthropic and read assistant text",
     summary:
-      "Missing ANTHROPIC_API_KEY or ANTHROPIC_MODEL → 500 (misconfiguration). SDK errors → generic 500 so internal details are not leaked. Concatenate all text blocks from the message.",
+      "Missing ANTHROPIC_API_KEY or ANTHROPIC_MODEL → 500 (misconfiguration). SDK errors → generic 500 so internal details are not leaked. Assistant `content` is a block array, not one string—see `getTextFromMessage`.",
     code: `  const apiKey = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL;
-  if (!apiKey || !model) {
+  if (!apiKey) {
+    return jsonError("Server configuration error", 500);
+  }
+  if (!model) {
     return jsonError("Server configuration error", 500);
   }
 
@@ -114,6 +118,7 @@ export async function POST(request: Request) {
 
   let rawAssistant: string;
   try {
+    // System = trusted contract; user = untrusted document only (README Prompt design).
     const message = await client.messages.create({
       model,
       max_tokens: 1024, // Cap cost / verbosity for this take-home.
@@ -121,7 +126,7 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "user",
-          content: \`Text:\\n\$\{text\}\`, // Document only in user message.
+          content: \`Text:\\n\$\{text\}\`,
         },
       ],
     });
@@ -131,7 +136,10 @@ export async function POST(request: Request) {
     return jsonError("Failed to complete analysis", 500);
   }
 
-// --- Extract plain text from Anthropic content blocks ---
+/**
+ * SDK: \`content\` is ContentBlock[], not a plain string—multiple \`text\` chunks or
+ * other types (e.g. tool_use) may appear; we join all \`text\` blocks and ignore the rest here.
+ */
 function getTextFromMessage(content: Anthropic.Message["content"]): string {
   const parts: string[] = [];
   for (const block of content) {
@@ -144,7 +152,7 @@ function getTextFromMessage(content: Anthropic.Message["content"]): string {
     id: "parse-model",
     title: "5. Parse model output (lib/parse-model-response.ts)",
     summary:
-      "Strip markdown fences the model sometimes adds anyway, then JSON.parse. Validate exact shape: non-empty summary string and exactly three non-empty string action items.",
+      "Strip markdown fences the model sometimes adds anyway, then JSON.parse. Validate exact shape: non-empty summary and exactly three non-empty string action items—anything else is 500 (even useful extra items; see README Future improvements).",
     code: `// lib/parse-model-response.ts — shared by the route handler
 
 /** Strip markdown code fences before JSON.parse. */

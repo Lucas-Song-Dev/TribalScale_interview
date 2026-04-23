@@ -161,9 +161,21 @@ curl -s -X POST http://localhost:3000/api/analyze ^
 { "error": "Human-readable error message" }
 ```
 
-**Validation (400):** missing or wrong-typed `text`, empty string after trim, text longer than `getMaxTextLength()` (from `MAX_TEXT_LENGTH` or default 10_000).
+**Failure contract (single map):** every path returns `{ "error": "<message>" }` with the status below—no need to trace `if` chains in the route to see the surface.
 
-**Server / model (500):** missing `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`, Anthropic request failure (generic message to client), unparseable model output, or shape that fails strict validation (exactly three non-empty string action items + non-empty summary).
+| Input / condition | HTTP | Response body `error` |
+|-------------------|------|------------------------|
+| Request body is not valid JSON | **400** | `Invalid JSON body` |
+| Body is missing, not a plain object, or is an array | **400** | `text field is required` |
+| `text` is missing or `null` | **400** | `text field is required` |
+| `text` is present but not a string | **400** | `text field is required` |
+| `text` is empty or whitespace-only after trim | **400** | `text must not be empty` |
+| `text` longer than `getMaxTextLength()` (from `MAX_TEXT_LENGTH` or default **10_000**) | **400** | `text exceeds maximum length` |
+| `ANTHROPIC_API_KEY` unset or empty | **500** | `Server configuration error` |
+| `ANTHROPIC_MODEL` unset or empty | **500** | `Server configuration error` |
+| Anthropic `messages.create` throws (network, auth, rate limit, etc.) | **500** | `Failed to complete analysis` |
+| Assistant text is not JSON after fence strip, or `JSON.parse` fails | **500** | `Failed to parse model response` |
+| JSON parses but fails shape checks (non-empty `summary`, exactly **three** non-empty string `action_items`) | **500** | `Invalid model output` |
 
 **Runtime:** [`app/api/analyze/route.ts`](app/api/analyze/route.ts) sets `export const runtime = "nodejs"` for the Anthropic SDK.
 
@@ -276,7 +288,7 @@ Analyze the following text and respond with ONLY valid JSON in this exact format
 Do not include any explanation, markdown formatting, or code fences.
 ```
 
-**User message:** `Text:\n{user text}` — instructions stay in `system`, document in `user`.
+**User message:** `Text:\n{user text}` — the JSON contract and formatting rules live in **`system`**; only the untrusted document lives in **`user`**. Models generally treat **system** instructions with higher authority than **user** content, so this separation reduces **prompt-injection** risk: pasted text cannot as easily override “return only JSON” the way it could if instructions and document were blended in one role.
 
 ---
 
@@ -290,6 +302,7 @@ Do not include any explanation, markdown formatting, or code fences.
 ## Future improvements
 
 - **Anthropic tool use / structured outputs** for schema-bound responses.
+- **Strict shape vs useful model output:** the parser requires **exactly three** non-empty `action_items`; if the model returns four good items, splits one item across strings, or otherwise drifts slightly, the handler still returns **500** (`Invalid model output`) even when the prose was helpful—relaxing to **≥ 3** items (with truncation or returning extras) or enforcing schema **upstream** via tool use avoids throwing away good generations.
 - **One retry** on parse failure with a stricter JSON-only reminder.
 - **Prompt-injection** hardening, **rate limiting**, richer **server-side** logging for 500s.
 - **Contract / E2E** tests against a deployed preview or recorded fixtures.

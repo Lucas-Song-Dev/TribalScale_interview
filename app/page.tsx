@@ -110,14 +110,7 @@ export default function Home() {
                   /api/analyze
                 </code>{" "}
                 returns a summary and three action items as JSON. For a
-                line-by-line walkthrough with copy-friendly snippets, open the{" "}
-                <Link
-                  href="/backend"
-                  className="font-semibold text-red-600 underline decoration-red-500/80 underline-offset-2 hover:text-red-700 hover:decoration-red-600 dark:text-red-400 dark:decoration-red-400/80 dark:hover:text-red-300"
-                >
-                  backend reference page
-                </Link>
-                .
+                line-by-line walkthrough with copy-friendly snippets.
               </p>
             </header>
 
