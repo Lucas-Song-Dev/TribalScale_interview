@@ -33,9 +33,30 @@ describe("Home page", () => {
   it("shows reviewer scope disclaimer", () => {
     render(<Home />);
     expect(screen.getByRole("note")).toBeInTheDocument();
-    expect(screen.getByText("Reviewer note (scope)")).toBeInTheDocument();
-    expect(screen.getByText(/not part of the take-home/i)).toBeInTheDocument();
+    expect(screen.getByText("For reviewers")).toBeInTheDocument();
+    expect(screen.getByText(/scope creep/i)).toBeInTheDocument();
     expect(screen.getByText(/POST \/api\/analyze/i)).toBeInTheDocument();
+  });
+
+  it("links to the backend walkthrough page", () => {
+    render(<Home />);
+    const walkthrough = screen.getByRole("link", {
+      name: /open annotated backend walkthrough/i,
+    });
+    expect(walkthrough).toHaveAttribute("href", "/backend");
+    const inline = screen.getByRole("link", { name: /backend reference page/i });
+    expect(inline).toHaveAttribute("href", "/backend");
+  });
+
+  it("links to the source repository on GitHub", () => {
+    render(<Home />);
+    const repo = screen.getByRole("link", {
+      name: /open repository on github/i,
+    });
+    expect(repo).toHaveAttribute(
+      "href",
+      "https://github.com/Lucas-Song-Dev/TribalScale_interview"
+    );
   });
 
   it("disables submit when textarea is empty", () => {
@@ -88,6 +109,42 @@ describe("Home page", () => {
         body: JSON.stringify({ text: "Meeting notes about release." }),
       })
     );
+  });
+
+  it("toggles results between HTML and JSON and can copy JSON", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      writable: true,
+      value: { writeText },
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        summary: "Ship by Friday.",
+        action_items: ["Alice owns API", "Bob writes notes", "QA signs off"],
+      }),
+    });
+
+    render(<Home />);
+    await user.type(screen.getByRole("textbox", { name: /text to analyze/i }), "x");
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await waitFor(() => {
+      expect(screen.getByText("Ship by Friday.")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "JSON" }));
+    expect(screen.getByText(/"summary": "Ship by Friday/i)).toBeInTheDocument();
+    expect(screen.getByText(/"action_items"/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /copy json/i }));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toContain('"summary"');
+    expect(writeText.mock.calls[0][0]).toContain("Alice owns API");
+
+    await user.click(screen.getByRole("button", { name: "HTML" }));
+    expect(screen.getByText("Ship by Friday.")).toBeInTheDocument();
   });
 
   it("shows API error message when response is not ok", async () => {
